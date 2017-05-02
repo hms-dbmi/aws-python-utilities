@@ -24,7 +24,8 @@ def populate_vault_auth0_full(settings, environment, task):
 
     vault_path = settings["VAULT_PROJECT_NAME"] + "/" + task + "/" + environment
 
-    secret_to_vault(settings, vault_path + "/auth0_success_url", settings["AUTH0_SUCCESS_URL"])
+    secret_to_vault(settings, vault_path + "/account_server_url", settings["ACCOUNT_SERVER_URL"])
+    secret_to_vault(settings, vault_path + "/auth0_success_url", settings[task.upper() + "_AUTH0_SUCCESS_URL"])
     secret_to_vault(settings, vault_path + "/auth0_logout_url", settings["AUTH0_LOGOUT_URL"])
     secret_to_vault(settings, vault_path + "/auth0_callback_url", settings["AUTH0_CALLBACK_URL"])
 
@@ -34,7 +35,6 @@ def populate_vault_registration_services(settings, environment, task):
     vault_path = settings["VAULT_PROJECT_NAME"] + "/" + environment
 
     secret_to_vault(settings, vault_path + "/auth0_success_url", settings["AUTH0_SUCCESS_URL_" + task])
-    secret_to_vault(settings, vault_path + "/account_server_url", settings["ACCOUNT_SERVER_URL"])
     secret_to_vault(settings, vault_path + "/permission_server_url", settings["PERMISSION_SERVER_URL"])
 
 

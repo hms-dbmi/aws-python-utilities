@@ -1,5 +1,5 @@
 import time
-
+from botocore.exceptions import ClientError
 
 def create_security_groups(stack_name, vpc, settings):
 
@@ -38,4 +38,28 @@ def add_ingress_to_sg(stack_name, vpc, cidr_ip, from_port, to_port):
 
     security_group = list(vpc.security_groups.filter(Filters=[{'Name': 'tag:Name', 'Values': [stack_name + '_SG']}]))[0]
 
-    security_group.authorize_ingress(CidrIp=cidr_ip, FromPort=from_port, ToPort=to_port, IpProtocol="tcp")
+    try:
+        security_group.authorize_ingress(CidrIp=cidr_ip, FromPort=from_port, ToPort=to_port, IpProtocol="tcp")
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'InvalidPermission.Duplicate':
+            print("Object already exists")
+        else:
+            print("Unexpected error: %s" % e)
+
+
+def add_sg_ingress_to_sg(sg_name, vpc, source_security_group_name, from_port, to_port):
+
+    origin_sg = list(vpc.security_groups.filter(Filters=[{'Name': 'tag:Name', 'Values': [source_security_group_name]}]))[0]
+    destination_sg = list(vpc.security_groups.filter(Filters=[{'Name': 'tag:Name', 'Values': [sg_name]}]))[0]
+
+    security_group_ip_perm = [{"IpProtocol": 'tcp', "UserIdGroupPairs": [{"GroupId": origin_sg.id}], "FromPort": from_port, "ToPort": to_port}]
+
+    print(security_group_ip_perm)
+
+    try:
+        destination_sg.authorize_ingress(IpPermissions=security_group_ip_perm)
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'InvalidPermission.Duplicate':
+            print("Object already exists")
+        else:
+            print("Unexpected error: %s" % e)

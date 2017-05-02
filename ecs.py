@@ -2,18 +2,38 @@ def create_ecs_cluster(ecs_client, cluster_name):
     print("Create ECS Cluster")
     ecs_client.create_cluster(clusterName=cluster_name)
 
-def create_ecs_ec2(stack_name, cluster_name, vpc, ec2, userdata_string, settings, environment):
 
-    print("Create EC2 for ECS")
+def create_machine_tags(environment, stack_name, cluster_name, settings):
 
-    machine_tags = [{"Key": "owner", "Value": settings["MACHINE_OWNER"]},
+    return [{"Key": "owner", "Value": settings["MACHINE_OWNER"]},
                     {"Key": "environment", "Value": environment},
                     {"Key": "project", "Value": stack_name},
                     {"Key": "department", "Value": settings["GROUP_OWNER"]},
                     {"Key": "Name", "Value": cluster_name}]
 
+
+def create_ecs_ec2(stack_name, cluster_name, vpc, ec2, userdata_string, settings, environment):
+
+    print("Create EC2 for ECS")
+
     ec2_security_groups = list(vpc.security_groups.filter(Filters=[{'Name': 'tag:Name', 'Values': [stack_name + '_SG']}]))[0]
 
+    subnet_id=""
+
+    try:
+        if settings["SUBNET_ID"]:
+            subnet_id = settings["SUBNET_ID"]
+    except KeyError:
+        pass
+
+    new_instance = create_ec2(ec2, settings, ec2_security_groups, userdata_string, subnet_id)
+    machine_tags = create_machine_tags(environment, stack_name, cluster_name, settings)
+
+    new_instance[0].create_tags(Tags=machine_tags)
+    new_instance[0].wait_until_running()
+
+
+def create_ec2(ec2, settings, ec2_security_groups, userdata_string, subnet_id):
     new_instance = ec2.create_instances(ImageId=settings['AMI_IMAGE_ID'],
                                         MinCount=1,
                                         MaxCount=1,
@@ -21,11 +41,11 @@ def create_ecs_ec2(stack_name, cluster_name, vpc, ec2, userdata_string, settings
                                         SecurityGroupIds=[ec2_security_groups.id],
                                         KeyName=settings['EC2_KEY_NAME'],
                                         UserData=userdata_string,
+                                        SubnetId=subnet_id,
                                         IamInstanceProfile={"Arn": settings['EC2_IAM_INSTANCE_PROFILE_ARN']},
-                                        Placement={'AvailabilityZone': settings['AVAILABILITY_ZONE']})
-
-    new_instance[0].create_tags(Tags=machine_tags)
-    new_instance[0].wait_until_running()
+                                        Placement={'AvailabilityZone': settings['AVAILABILITY_ZONE'],
+                                                   'Tenancy': settings['TENANCY']})
+    return new_instance
 
 
 def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment, taskname):
@@ -43,13 +63,17 @@ def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment
 
     app_image_enviro_repo = settings["APP_IMAGE_REPO_" + taskname + "_" + environment.upper()]
 
+    container_port_mappings = []
+
+    for port_mapping in settings[taskname + "_PORT"].split(","):
+        container_port_mappings.append({'hostPort': int(port_mapping), 'containerPort': int(port_mapping)})
+
     container_definition = [{
         'name': cluster_name + "_" + taskname,
         'image': app_image_enviro_repo,
         'memoryReservation': int(settings["CONTAINER_MEMORY_RESERVATION"]),
         'memory': int(settings["CONTAINER_MEMORY"]),
-        'portMappings': [
-            {'hostPort': int(settings[taskname + "_PORT"]), 'containerPort': int(settings[taskname + "_PORT"])}],
+        'portMappings': container_port_mappings,
         'environment': [{'name': 'VAULT_ADDR', 'value': settings["VAULT_URL"]},
                         {'name': 'VAULT_PATH', 'value': vault_path},
                         {'name': 'DB_VAULT_PATH', 'value': db_vault_path},
