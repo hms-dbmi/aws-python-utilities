@@ -1,3 +1,37 @@
+from iam import create_role, add_policy_to_role
+from botocore.exceptions import ClientError
+
+
+def create_ecs_task_role(stack_name):
+    ecs_trust_relationship = {
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+
+    try:
+        create_role(stack_name + "-TASK-ROLE", ecs_trust_relationship)
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'InvalidPermission.Duplicate':
+            print("Object already exists")
+        else:
+            print("Unexpected error: %s" % e)
+
+
+def add_policy_to_ecs_task_role(stack_name, settings):
+    decrypt_key_policy_arn = "arn:aws:iam::" + settings["ACCOUNT_NUMBER"] + ":policy/" + stack_name + "-KEY-USER"
+    access_parameter_store_arn = "arn:aws:iam::" + settings["ACCOUNT_NUMBER"] + ":policy/" + stack_name + "-PARAMETER-ACCESS"
+
+    add_policy_to_role(stack_name + "-TASK-ROLE", decrypt_key_policy_arn)
+    add_policy_to_role(stack_name + "-TASK-ROLE", access_parameter_store_arn)
+
+
 def create_ecs_cluster(ecs_client, cluster_name):
     print("Create ECS Cluster")
     ecs_client.create_cluster(clusterName=cluster_name)
@@ -48,11 +82,11 @@ def create_ec2(ec2, settings, ec2_security_groups, userdata_string, subnet_id):
     return new_instance
 
 
-def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment, taskname):
+def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment, taskname, taskrole=None):
 
     print("Create ECS Task " + environment + " " + taskname)
 
-    vault_path = settings["VAULT_PROJECT_NAME"] + '/' + taskname.lower() + "/" + environment + "/"
+    vault_path = settings["VAULT_PROJECT_NAME"] + '/' + taskname.lower() + "/" + environment
     db_vault_path = ""
 
     try:
@@ -76,6 +110,7 @@ def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment
         'portMappings': container_port_mappings,
         'environment': [{'name': 'VAULT_ADDR', 'value': settings["VAULT_URL"]},
                         {'name': 'VAULT_PATH', 'value': vault_path},
+                        {'name': 'PS_PATH', 'value': vault_path.replace("/", ".")},
                         {'name': 'DB_VAULT_PATH', 'value': db_vault_path},
                         {'name': 'VAULT_SKIP_VERIFY', 'value': '1'}]
     }]
@@ -93,7 +128,19 @@ def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment
     except KeyError:
         pass
 
-    ecs_client.register_task_definition(family=task_family + "-" + taskname, containerDefinitions=container_definition)
+    ecs_client.register_task_definition(family=task_family + "-" + taskname,
+                                        taskRoleArn=taskrole,
+                                        containerDefinitions=container_definition)
+
+
+def create_ecs_service(ecs_client, cluster_name, task_definition):
+
+    print(task_definition)
+
+    ecs_client.create_service(cluster=cluster_name,
+                              serviceName=cluster_name,
+                              taskDefinition=task_definition,
+                              desiredCount=1)
 
 
 
