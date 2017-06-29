@@ -135,29 +135,12 @@ def create_ecs_task(ecs_client, task_family, cluster_name, settings, environment
 
 def create_ecs_service(ecs_client, cluster_name, task_definition):
 
-    print(task_definition)
-
     ecs_client.create_service(cluster=cluster_name,
-                              serviceName=cluster_name,
+                              serviceName=task_definition,
                               taskDefinition=task_definition,
-                              desiredCount=1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                              desiredCount=1,
+                              deploymentConfiguration={
+                                  'maximumPercent': 100,
+                                  'minimumHealthyPercent': 0
+                              }
+                              )
