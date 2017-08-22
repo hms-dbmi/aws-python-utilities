@@ -90,7 +90,7 @@ def create_pipeline(stack_name, environment, task_name, settings, paramter_store
                             }
                         ],
                         "configuration": {
-                            "Branch": "development",
+                            "Branch": settings["REPO_BRANCH_" + task_name],
                             "OAuthToken": settings["GITHUB_OAUTH_TOKEN"],
                             "Owner": "hms-dbmi",
                             "Repo": settings["REPO_NAME_" + task_name]

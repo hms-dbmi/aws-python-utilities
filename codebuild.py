@@ -100,5 +100,8 @@ def create_codebuild(project_name, task_name, image_tag, settings):
     except ClientError as e:
         if e.response['Error']['Code'] == 'ResourceAlreadyExistsException':
             print("Error: %s" % e)
+        else:
+            print("Error: %s" % e)
+
 
 

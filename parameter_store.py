@@ -122,6 +122,7 @@ def secret_to_ps(ssm_client, secret_name, secret_value, key_name, dry_run):
     temp_secret_name = secret_name.replace("/", ".")
 
     if not dry_run:
+        print("Writing %s" % temp_secret_name)
         key_id = get_keys_arn(key_name)
         parameter_store_return = ssm_client.put_parameter(Name=temp_secret_name,
                                  Value=secret_value,
@@ -129,7 +130,7 @@ def secret_to_ps(ssm_client, secret_name, secret_value, key_name, dry_run):
                                  KeyId=key_id,
                                  Overwrite=True)
         print(parameter_store_return)
-        print(temp_secret_name)
+
         print("Written!")
     else:
         print(temp_secret_name)
